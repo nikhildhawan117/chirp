@@ -1,12 +1,13 @@
-import type { User } from "@clerk/backend/dist/types/api";
-import { clerkClient } from "@clerk/nextjs";
+import { User, clerkClient } from "@clerk/nextjs/server";
 import { TRPCError } from "@trpc/server";
+import { desc } from "drizzle-orm";
 import { z } from "zod";
 import {
   createTRPCRouter,
   privateProcedure,
   publicProcedure,
 } from "~/server/api/trpc";
+import { posts } from "~/server/db/schema";
 
 const filterUserForClient = (user: User) => {
   return {
@@ -18,19 +19,20 @@ const filterUserForClient = (user: User) => {
 
 export const postsRouter = createTRPCRouter({
   getAll: publicProcedure.query(async ({ ctx }) => {
-    const posts = await ctx.prisma.post.findMany({
-      take: 100,
-      orderBy: [{ createdAt: "desc" }],
-    });
+    const allPosts = await ctx.db
+      .select()
+      .from(posts)
+      .limit(100)
+      .orderBy(desc(posts.createdAt));
 
     const users = (
       await clerkClient.users.getUserList({
-        userId: posts.map((post) => post.authorId),
+        userId: allPosts.map((post) => post.authorId),
         limit: 100,
       })
-    ).map(filterUserForClient);
+    ).data.map(filterUserForClient);
 
-    return posts.map((post) => {
+    return allPosts.map((post) => {
       const author = users.find((user) => user.id === post.authorId);
 
       if (!author)
@@ -63,12 +65,14 @@ export const postsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const authorId = ctx.userId;
 
-      const post = await ctx.prisma.post.create({
-        data: {
+      const post = await ctx.db
+        .insert(posts)
+        .values({
           authorId,
-          content: input.content, // why is content required? what is enforcing this?
-        },
-      });
-      return post;
+          content: input.content,
+        })
+        .returning();
+
+      return post[0];
     }),
 });

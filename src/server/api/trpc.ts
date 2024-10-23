@@ -11,7 +11,7 @@ import { TRPCError, initTRPC } from "@trpc/server";
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
 import superjson from "superjson";
 import { ZodError } from "zod";
-import { prisma } from "~/server/db";
+import { db } from "~/server/db";
 
 /**
  * 1. CONTEXT
@@ -34,8 +34,8 @@ export const createTRPCContext = (opts: CreateNextContextOptions) => {
   const session = getAuth(req);
   const userId = session.userId;
   return {
-    prisma,
-    userId,
+    db,
+    userId: userId,
   };
 };
 
